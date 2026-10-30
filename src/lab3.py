@@ -1,198 +1,160 @@
-# ============================= УВАГА! =============================
-# Цей файл містить ПРИКЛАД виконання лабораторної роботи.
-# Ваше завдання - розробити ВЛАСНУ програму згідно з вашим варіантом.
-#
-# Ви можете використовувати цей код як зразок, але не копіювати його.
-# Повністю замініть цей код своєю реалізацією.
-#
-# Ваш код повинен відповідати таким вимогам:
-# 1. Обрана предметна область згідно з вашим варіантом.
-# 2. Реалізовано всі необхідні функції:
-#    - додавання, видалення, оновлення даних
-#    - пошук та фільтрація
-#    - обчислення статистик (середнє, min/max)
-#    - групування та агрегація
-# 3. Використано map(), filter(), reduce(), сортування, зрізи.
-# 4. Реалізовано операції з множинами та словниками.
-# 5. Створено інтерактивне меню для користувача.
-# =================================================================
-
-from collections import defaultdict
 from functools import reduce
-import datetime
+from collections import defaultdict
 
-# Приклад: Аналіз даних про продажі
-# ЗАМІНІТЬ ЦІ ДАНІ ТА ЛОГІКУ НА ВАШІ ВЛАСНІ
+# Дані
+KEYS = ("city", "t_avg", "t_min", "t_max", "precip", "rain_days", "wind_max", "t_anom", "p_anom")
+NAME = dict(zip(KEYS, ("Місто", "T сер", "T мін", "T макс", "Опади", "Дощ.дн", "Вітер", "ΔT", "Δопад")))
+NUM = KEYS[1:]
+NOTE = "  MeteoArhiv.com.ua, 30 днів до 29.10.2026 (Одеса — до 21.10) · T °C, опади мм, вітер м/с, Δ — від норми"
+data = [dict(zip(KEYS, r)) for r in [
+    ("Київ", 12.1, 5.9, 22.8, 64.0, 14, 4.3, 3.6, 42), ("Львів", 11.2, 3.3, 25.0, 43.2, 13, 6.3, 2.1, -11),
+    ("Одеса", 14.7, 5.7, 22.0, 57.7, 9, 5.2, 1.0, 72), ("Харків", 12.7, 4.8, 24.6, 82.2, 9, 4.4, 4.3, 90)]]
 
-# 1. Підготовка даних
-sales_data = [
-    {"date": "2023-01-01", "product": "Laptop", "category": "Electronics", "price": 1200, "quantity": 5},
-    {"date": "2023-01-02", "product": "Smartphone", "category": "Electronics", "price": 800, "quantity": 10},
-    {"date": "2023-01-03", "product": "T-shirt", "category": "Clothing", "price": 20, "quantity": 50},
-    {"date": "2023-01-04", "product": "Jeans", "category": "Clothing", "price": 60, "quantity": 30},
-    {"date": "2023-01-05", "product": "Keyboard", "category": "Electronics", "price": 75, "quantity": 20},
-]
 
-# 2. Функції для роботи з даними
-def add_sale(data, sale):
-    """Додає новий запис про продаж."""
-    data.append(sale)
-    print("Продаж додано успішно.")
+# Оформлення та введення
+def grid(cells):
+    """Малює таблицю; перший рядок — заголовок."""
+    w = [max(map(len, col)) for col in zip(*cells)]
+    isnum = lambda v: v.replace(".", "").lstrip("+-").isdigit()
+    al = [">" if all(map(isnum, col[1:])) else "<" for col in zip(*cells)] 
+    line = lambda a, b, c: "  " + a + b.join("─" * (x + 2) for x in w) + c
+    print(line("┌", "┬", "┐"))
+    for i, row in enumerate(cells):
+        print("  │" + "│".join(f" {v:{a}{x}} " for v, a, x in zip(row, al, w)) + "│")
+        if i == 0:
+            print(line("├", "┼", "┤"))
+    print(line("└", "┴", "┘"))
 
-def remove_sale(data, index):
-    """Видаляє запис про продаж за індексом."""
-    if 0 <= index < len(data):
-        del data[index]
-        print("Продаж видалено успішно.")
-    else:
-        print("Невірний індекс.")
+def table(rows, title):
+    print(f"\n ▸ {title}")
+    if not rows:
+        return print("  (нічого не знайдено)")
+    pos = {id(r): str(i + 1) for i, r in enumerate(data)}
+    fmt = lambda v: f"{v:.1f}" if isinstance(v, float) else str(v)
+    grid([["№"] + [NAME[k] for k in KEYS]] + [[pos[id(r)]] + [fmt(r[k]) for k in KEYS] for r in rows])
 
-def update_sale(data, index, key, value):
-    """Оновлює інформацію про продаж."""
-    if 0 <= index < len(data):
-        # Перетворення значення до відповідного типу
-        if key in ['price', 'quantity']:
-            try:
-                value = float(value) if key == 'price' else int(value)
-            except ValueError:
-                print(f"Невірний тип значення для ключа '{key}'")
-                return
-        data[index][key] = value
-        print("Інформацію оновлено успішно.")
-    else:
-        print("Невірний індекс.")
+def num(label, cast=float):
+    while True:
+        try:
+            return cast(input(f"  {label}: ").replace(",", "."))
+        except ValueError:
+            print("  ✘ Введіть число")
 
-def find_sales_by_product(data, product):
-    """Знаходить всі продажі конкретного продукту."""
-    return list(filter(lambda x: x["product"].lower() == product.lower(), data))
+def pick(keys=NUM):
+    print("  " + "  ".join(f"{i}) {NAME[k]}" for i, k in enumerate(keys, 1)))
+    while True:
+        n = num("Номер", int)
+        if 1 <= n <= len(keys):
+            return keys[n - 1]
 
-# 3. Специфічні функції аналізу
-def calculate_total_sales(data):
-    """Обчислює загальну суму продажів."""
-    return reduce(lambda acc, sale: acc + sale["price"] * sale["quantity"], data, 0)
+def val(k):
+    return input(f"  {NAME[k]}: ").strip().title() if k == "city" else num(NAME[k], int if k == "rain_days" else float)
 
-def calculate_average_price(data):
-    """Обчислює середню ціну товару."""
-    prices = [sale["price"] for sale in data]
-    return sum(prices) / len(prices) if prices else 0
+def ask_i():
+    i = num("№ запису", int) - 1
+    if not 0 <= i < len(data):
+        raise IndexError
+    return i
 
-# 4. Вбудовані функції та методи
-def sort_sales_by_date(data):
-    """Сортує продажі за датою."""
-    return sorted(data, key=lambda x: datetime.datetime.strptime(x["date"], "%Y-%m-%d"))
 
-# 5. Робота з множинами та словниками
-def group_sales_by_category(data):
-    """Групує продажі за категоріями."""
-    categories = defaultdict(list)
-    for sale in data:
-        categories[sale["category"]].append(sale)
-    return dict(categories)
+# Додавання, видалення, оновлення
+def add():
+    data.append({k: val(k) for k in KEYS})
+    print("  ✔ Додано")
 
-def find_best_selling_product(data):
-    """Знаходить товар, який найкраще продається."""
-    if not data:
-        return None
-    products = defaultdict(int)
-    for sale in data:
-        products[sale["product"]] += sale["quantity"]
-    return max(products, key=products.get)
+def remove():
+    table(data, "Усі записи")
+    print(f"  ✔ Видалено «{data.pop(ask_i())['city']}»")
 
-# 6. Інтерактивне меню
-def print_menu():
-    """Виводить меню опцій."""
-    print("\n==== Меню аналізу продажів (ПРИКЛАД) ====")
-    print("1. Показати всі продажі")
-    print("2. Додати новий продаж")
-    print("3. Видалити продаж")
-    print("4. Оновити інформацію про продаж")
-    print("5. Знайти продажі за назвою товару")
-    print("6. Обчислити загальну суму продажів")
-    print("7. Групувати продажі за категоріями")
-    print("8. Сортувати продажі за датою")
-    print("9. Знайти товар, який найкраще продається")
-    print("10. Обчислити середню ціну товару")
-    print("0. Вийти")
+def update():
+    table(data, "Усі записи")
+    r = data[ask_i()]
+    k = pick(KEYS)
+    r[k] = val(k)
+    print("  ✔ Оновлено")
+
+
+# Пошук і фільтрація 
+def find():
+    q = input("  Місто: ").lower()
+    table(list(filter(lambda r: q in r["city"].lower(), data)), "Результат пошуку")
+
+def flt():
+    k = pick()
+    lo, hi = num("Від"), num("До")
+    table(list(filter(lambda r: lo <= r[k] <= hi, data)), f"{NAME[k]}: {lo} … {hi}")
+
+
+# Статистика (map, reduce, min, max)
+def stats():
+    rows = [["Показник", "Середнє", "Мінімум", "Максимум"]]
+    for k in NUM:
+        v = list(map(lambda r: r[k], data))
+        lo, hi = min(data, key=lambda r: r[k]), max(data, key=lambda r: r[k])
+        rows.append([NAME[k], f"{reduce(lambda a, b: a + b, v) / len(v):.1f}", f"{lo[k]} {lo['city']}", f"{hi[k]} {hi['city']}"])
+    print()
+    grid(rows)
+
+
+# Групування, сортування, зрізи
+def group():
+    g = defaultdict(list)
+    for r in data:
+        g["Вологіше за норму" if r["p_anom"] > 0 else "Сухіше за норму"].append(r)
+    print()
+    grid([["Група", "Міста", "Сер. T", "Сума опадів"]] + [
+        [n, ", ".join(r["city"] for r in rs), f"{sum(r['t_avg'] for r in rs) / len(rs):.1f}",
+         f"{sum(r['precip'] for r in rs):.1f}"] for n, rs in g.items()])
+
+def sort_slice():
+    k = pick()
+    s = sorted(data, key=lambda r: r[k], reverse=input("  За спаданням? (т/н): ") == "т")
+    n = num("Розмір зрізу N", int)
+    table(s[:n], f"Перші {n}")
+    table(s[-n:], f"Останні {n}")
+
+
+# Множини та словники
+def sets():
+    c = lambda p: {r["city"] for r in filter(p, data)}
+    a, b = c(lambda r: r["t_max"] >= 24), c(lambda r: r["precip"] >= 60)
+    s = lambda x: ", ".join(sorted(x)) or "—"
+    print()
+    grid([["Множина", "Міста"], ["A: T макс ≥ 24 °C", s(a)], ["B: опади ≥ 60 мм", s(b)],
+          ["A ∪ B (об'єднання)", s(a | b)], ["A ∩ B (перетин)", s(a & b)], ["A − B (різниця)", s(a - b)]])
+
+def dicts():
+    f = {}
+    for r in data:
+        c = "ΔT ≥ +3 °C" if r["t_anom"] >= 3 else "ΔT < +3 °C"
+        f[c] = f.get(c, 0) + 1
+    print()
+    grid([["Категорія", "К-сть"]] + [[c, str(n)] for c, n in f.items()])
+    print("  Індекс місто → №:", {r["city"]: i + 1 for i, r in enumerate(data)})
+
+
+# Меню
+MENU = [("Показати всі записи", lambda: (table(data, "Усі записи"), print(NOTE))), ("Додати запис", add),
+        ("Видалити запис", remove), ("Оновити запис", update), ("Пошук за містом", find),
+        ("Фільтр за діапазоном", flt), ("Статистика (сер., мін, макс)", stats), ("Групування та агрегація", group),
+        ("Сортування та зрізи", sort_slice), ("Операції з множинами", sets), ("Словники: частоти, індекс", dicts)]
 
 def main():
-    """Головна функція програми."""
-    global sales_data
     while True:
-        print_menu()
-        choice = input("Оберіть опцію: ")
-
-        if choice == "1":
-            if not sales_data:
-                print("Немає даних про продажі.")
-            for i, sale in enumerate(sales_data):
-                print(f"{i}: {sale}")
-        elif choice == "2":
-            try:
-                date = input("Введіть дату (YYYY-MM-DD): ")
-                datetime.datetime.strptime(date, "%Y-%m-%d") # перевірка формату
-                product = input("Введіть назву товару: ")
-                category = input("Введіть категорію: ")
-                price = float(input("Введіть ціну: "))
-                quantity = int(input("Введіть кількість: "))
-                new_sale = {"date": date, "product": product, "category": category, "price": price, "quantity": quantity}
-                add_sale(sales_data, new_sale)
-            except ValueError:
-                print("Помилка введення. Перевірте формат дати, ціни та кількості.")
-        elif choice == "3":
-            try:
-                index = int(input("Введіть індекс продажу для видалення: "))
-                remove_sale(sales_data, index)
-            except ValueError:
-                print("Невірний індекс. Введіть число.")
-        elif choice == "4":
-            try:
-                index = int(input("Введіть індекс продажу для оновлення: "))
-                if not (0 <= index < len(sales_data)):
-                    print("Невірний індекс.")
-                    continue
-                key = input("Введіть ключ для оновлення (date/product/category/price/quantity): ")
-                if key not in sales_data[0]:
-                    print("Невірний ключ.")
-                    continue
-                value = input("Введіть нове значення: ")
-                update_sale(sales_data, index, key, value)
-            except ValueError:
-                print("Невірний індекс. Введіть існуючий числовий індекс.")
-        elif choice == "5":
-            product = input("Введіть назву товару для пошуку: ")
-            results = find_sales_by_product(sales_data, product)
-            if results:
-                for sale in results:
-                    print(sale)
-            else:
-                print(f"Продажі для товару '{product}' не знайдено.")
-        elif choice == "6":
-            total = calculate_total_sales(sales_data)
-            print(f"Загальна сума продажів: {total}")
-        elif choice == "7":
-            grouped = group_sales_by_category(sales_data)
-            for category, sales in grouped.items():
-                print(f"\nКатегорія: {category}:")
-                for sale in sales:
-                    print(f"  {sale}")
-        elif choice == "8":
-            sorted_sales = sort_sales_by_date(sales_data)
-            for sale in sorted_sales:
-                print(sale)
-        elif choice == "9":
-            best_product = find_best_selling_product(sales_data)
-            if best_product:
-                print(f"Товар, який найкраще продається: {best_product}")
-            else:
-                print("Немає даних для аналізу.")
-        elif choice == "10":
-            avg_price = calculate_average_price(sales_data)
-            print(f"Середня ціна товару: {avg_price:.2f}")
-        elif choice == "0":
-            print("Дякуємо за використання програми!")
+        print("\n╔" + "═" * 44 + "╗\n║" + "АНАЛІЗ ПОГОДИ ".center(44) + "║\n╠" + "═" * 44 + "╣")
+        for i, (title, _) in enumerate(MENU, 1):
+            print(f"║ {i:>2}. {title:<39}║")
+        print("║  0. Вийти".ljust(45) + "║\n╚" + "═" * 44 + "╝")
+        ch = input("  Ваш вибір ▸ ").strip()
+        if ch == "0":
             break
-        else:
-            print("Невірний вибір. Спробуйте ще раз.")
+        try:
+            if not (ch.isdigit() and 1 <= int(ch) <= len(MENU)):
+                raise ValueError
+            MENU[int(ch) - 1][1]()
+        except (ValueError, IndexError):
+            print("  ✘ Некоректний ввід")
+        input("\n  Enter — продовжити…")
 
 if __name__ == "__main__":
     main()
